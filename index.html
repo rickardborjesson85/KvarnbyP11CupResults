@@ -509,7 +509,14 @@
 
   // ── API ────────────────────────────────────────────────────────────────────
   function buildQuery(matchId) {
-    return `Match({id:${matchId}}){home:{},away:{},feed:{events:[{}]},result:{}}`;
+    return `Match({id:${matchId}}){home:{team:{club:{nation:{}}}},away:{team:{club:{nation:{}}}},feed:{statistics:{},events:[{}]},result:{}}`;
+  }
+
+  function flagEmoji(code) {
+    if (!code || code.length !== 2) return '';
+    return [...code.toUpperCase()].map(c =>
+      String.fromCodePoint(0x1F1E6 + c.charCodeAt(0) - 65)
+    ).join('');
   }
 
   async function callApi(query, baseUrl, tournamentId) {
@@ -700,7 +707,22 @@
     const responses = data.responses || {};
     let homeTeamName = 'Hemmalag';
     let awayTeamName = 'Bortalag';
+    let homeFlag = '';
+    let awayFlag = '';
     let matchDate = null;
+
+    // Build entity lookup for href resolution
+    const entityMap = {};
+    for (const [key, val] of Object.entries(responses)) {
+      if (val.entity) entityMap[key] = val.entity;
+    }
+
+    function getNationCode(actorEntity) {
+      const team   = entityMap[actorEntity.team?.href];
+      const club   = entityMap[team?.club?.href];
+      const nation = entityMap[club?.nation?.href];
+      return nation?.code || '';
+    }
 
     const goals = [];
     const fouls = [];
@@ -715,13 +737,14 @@
         if (!matchDate && entity.start) matchDate = new Date(entity.start);
       }
 
-      // Team names
+      // Team names + flags
       if (key.startsWith('MatchActor(') && entity.__typename === 'MatchActor') {
         const isHome = key.includes('"home"') || key.includes("actor:\"home\"");
         const isAway = key.includes('"away"') || key.includes("actor:\"away\"");
         const teamName = entity.name?.sv || entity.name?.en || '';
-        if (isHome && teamName) homeTeamName = teamName;
-        if (isAway && teamName) awayTeamName = teamName;
+        const flag = flagEmoji(getNationCode(entity));
+        if (isHome && teamName) { homeTeamName = teamName; homeFlag = flag; }
+        if (isAway && teamName) { awayTeamName = teamName; awayFlag = flag; }
       }
 
       // Match date from MatchFeed (fallback)
@@ -780,12 +803,15 @@
     }
 
     const periodScores = computePeriodScores(goals);
-    const homeStats = buildPlayerStats(goals.filter(g => g.side === 'home'), fouls.filter(f => f.side === 'home'));
-    const awayStats = buildPlayerStats(goals.filter(g => g.side === 'away'), fouls.filter(f => f.side === 'away'));
+    const statsFromApi = parseStatistics(responses);
+    const homeStats = statsFromApi?.homeStats
+      || buildPlayerStats(goals.filter(g => g.side === 'home'), fouls.filter(f => f.side === 'home'));
+    const awayStats = statsFromApi?.awayStats
+      || buildPlayerStats(goals.filter(g => g.side === 'away'), fouls.filter(f => f.side === 'away'));
     const homeEvents = events.filter(e => e.side === 'home');
     const awayEvents = events.filter(e => e.side === 'away');
 
-    return { homeTeamName, awayTeamName, finalHome, finalAway, periodScores, homeStats, awayStats, matchDate, homeEvents, awayEvents };
+    return { homeTeamName, awayTeamName, homeFlag, awayFlag, finalHome, finalAway, periodScores, homeStats, awayStats, matchDate, homeEvents, awayEvents };
   }
 
   function computePeriodScores(goals) {
@@ -819,6 +845,34 @@
       const pb = b.pt1 + b.pt2 * 2 + b.pt3 * 3;
       return pb - pa;
     });
+  }
+
+  function parseStatistics(responses) {
+    for (const [key, val] of Object.entries(responses)) {
+      if (!key.endsWith('$statistics') || !val.entity?.periods) continue;
+      const home = {}, away = {};
+      for (const period of val.entity.periods) {
+        for (const p of (period.home?.players || [])) {
+          if (!home[p.name]) home[p.name] = { name: p.name, nr: p.shirtNr, pt1: 0, pt2: 0, pt3: 0, fouls: 0 };
+          home[p.name].pt1   += p.onePointers   || 0;
+          home[p.name].pt2   += p.twoPointers   || 0;
+          home[p.name].pt3   += p.threePointers || 0;
+          home[p.name].fouls += (p.fouls || []).length;
+        }
+        for (const p of (period.away?.players || [])) {
+          if (!away[p.name]) away[p.name] = { name: p.name, nr: p.shirtNr, pt1: 0, pt2: 0, pt3: 0, fouls: 0 };
+          away[p.name].pt1   += p.onePointers   || 0;
+          away[p.name].pt2   += p.twoPointers   || 0;
+          away[p.name].pt3   += p.threePointers || 0;
+          away[p.name].fouls += (p.fouls || []).length;
+        }
+      }
+      const sort = obj => Object.values(obj).sort((a, b) =>
+        (b.pt1 + b.pt2 * 2 + b.pt3 * 3) - (a.pt1 + a.pt2 * 2 + a.pt3 * 3)
+      );
+      return { homeStats: sort(home), awayStats: sort(away) };
+    }
+    return null;
   }
 
   function formatDate(d) {
@@ -957,12 +1011,12 @@
     ${headerMeta}
     <div class="score-row">
       <div class="team-block">
-        <div class="team-name">${esc(g.homeTeamName)}</div>
+        <div class="team-name">${g.homeFlag ? g.homeFlag + ' ' : ''}${esc(g.homeTeamName)}</div>
         <div class="team-score home-score">${g.finalHome}</div>
       </div>
       <div class="score-sep">–</div>
       <div class="team-block">
-        <div class="team-name">${esc(g.awayTeamName)}</div>
+        <div class="team-name">${g.awayFlag ? g.awayFlag + ' ' : ''}${esc(g.awayTeamName)}</div>
         <div class="team-score away-score">${g.finalAway}</div>
       </div>
     </div>
@@ -978,10 +1032,10 @@
   </div>
 
   <div class="teams-grid">
-    ${renderTeamPanel(g.homeTeamName, g.homeStats, 'home')}
-    ${renderTeamPanel(g.awayTeamName, g.awayStats, 'away')}
+    ${renderTeamPanel(g.homeTeamName, g.homeFlag, g.homeStats, 'home')}
+    ${renderTeamPanel(g.awayTeamName, g.awayFlag, g.awayStats, 'away')}
   </div>
-  ${renderEventTimeline(g.homeEvents, g.awayEvents, g.homeTeamName, g.awayTeamName, g.periodScores)}
+  ${renderEventTimeline(g.homeEvents, g.awayEvents, g.homeTeamName, g.awayTeamName, g.periodScores, g.homeFlag, g.awayFlag)}
 </div>`;
   }
 
@@ -989,7 +1043,7 @@
     return p == 0 ? 'P1' : p == 1 ? 'P2' : p == 2 ? 'P3' : p == 3 ? 'P4' : `FT${p - 3}`;
   }
 
-  function renderEventTimeline(homeEvents, awayEvents, homeTeam, awayTeam, periodScores) {
+  function renderEventTimeline(homeEvents, awayEvents, homeTeam, awayTeam, periodScores, homeFlag, awayFlag) {
     const all = [...(homeEvents || []), ...(awayEvents || [])];
     if (!all.length) return '';
 
@@ -1004,9 +1058,9 @@
     return `<div class="event-timeline">
       <div class="event-timeline-title">Händelselogg</div>
       <div class="tl-names">
-        <div class="tl-home" style="color:var(--green-text)">${esc(homeTeam)}</div>
+        <div class="tl-home" style="color:var(--green-text)">${homeFlag ? homeFlag + ' ' : ''}${esc(homeTeam)}</div>
         <div class="tl-score"></div>
-        <div class="tl-away" style="color:var(--red)">${esc(awayTeam)}</div>
+        <div class="tl-away" style="color:var(--red)">${awayFlag ? awayFlag + ' ' : ''}${esc(awayTeam)}</div>
       </div>
       ${periods.map(p => {
         const evs = byPeriod[p].slice().sort((a, b) => b.time - a.time);
@@ -1044,7 +1098,7 @@
     </div>`;
   }
 
-  function renderTeamPanel(teamName, players, side) {
+  function renderTeamPanel(teamName, flag, players, side) {
     const isHome = side === 'home';
     const headerClass = isHome ? 'home-header' : 'away-header';
     const totalPts   = players.reduce((s, p) => s + p.pt1 + p.pt2 * 2 + p.pt3 * 3, 0);
@@ -1068,7 +1122,7 @@
     return `
 <div class="team-panel ${isHome ? 'home-panel' : 'away-panel'}">
   <div class="team-panel-header ${headerClass}">
-    <span>${esc(teamName)}</span>
+    <span>${flag ? flag + ' ' : ''}${esc(teamName)}</span>
     <span>${totalPts} poäng</span>
   </div>
   <table class="stats-table">
