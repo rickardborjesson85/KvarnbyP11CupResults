@@ -155,7 +155,8 @@
       gap: 6px;
     }
     #refreshBtn:hover { border-color: var(--green-accent); color: var(--fg); }
-    #refreshBtn.spinning { animation: spin 1s linear infinite; }
+    #refreshBtn .ball { display: inline-block; }
+    #refreshBtn.spinning .ball { animation: spin 0.8s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
 
     .game-tabs {
@@ -464,7 +465,7 @@
     <div class="header-text">
       <h1>Kvarnby Basket P11</h1>
     </div>
-    <button type="button" id="refreshBtn" title="Uppdatera matchdata">↻ Uppdatera</button>
+    <button type="button" id="refreshBtn" title="Uppdatera matchdata"><span class="ball">🏀</span> Uppdatera</button>
   </header>
 
   <div class="game-tabs" id="gameTabs"></div>
