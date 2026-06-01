@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin – Kvarnby Basket</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --green-dark:   #0d1f12;
+      --green-card:   #122518;
+      --green-border: #1e3d28;
+      --green-mid:    #1f5c36;
+      --green-accent: #2e8b57;
+      --green-bright: #3cb371;
+      --green-text:   #6fcf97;
+      --red:          #fc8181;
+      --gold:         #f6c90e;
+      --fg:           #e2e8f0;
+      --fg-muted:     #8aaa96;
+    }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--green-dark); color: var(--fg); min-height: 100vh; }
+
+    /* ── Password overlay ── */
+    #passwordOverlay {
+      position: fixed; inset: 0; background: var(--green-dark);
+      display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 1000; padding: 24px;
+    }
+    .logo-text { font-size: 2.4rem; font-weight: 900; letter-spacing: 0.12em; color: var(--green-bright); text-transform: uppercase; font-style: italic; margin-bottom: 8px; }
+    #passwordOverlay h2 { font-size: 1rem; color: var(--fg-muted); margin-bottom: 20px; }
+    #pwForm { display: flex; gap: 8px; }
+    #pwInput { padding: 12px 16px; background: var(--green-card); border: 1px solid var(--green-border); border-radius: 8px; color: var(--fg); font-size: 1.1rem; letter-spacing: 0.15em; width: 160px; text-align: center; outline: none; }
+    #pwInput:focus { border-color: var(--green-accent); }
+    #pwInput.error { border-color: var(--red); animation: shake 0.3s; }
+    @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-6px)} 75%{transform:translateX(6px)} }
+    #pwBtn { padding: 12px 24px; background: var(--green-accent); color: #fff; font-weight: 700; border: none; border-radius: 8px; cursor: pointer; }
+    #pwBtn:hover { background: var(--green-bright); }
+
+    /* ── Layout ── */
+    #mainApp { display: none; }
+
+    header {
+      background: linear-gradient(135deg, #0a1a0e, var(--green-card));
+      border-bottom: 2px solid var(--green-accent);
+      padding: 12px 24px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    }
+    .back-link { color: var(--fg-muted); text-decoration: none; font-size: 0.85rem; white-space: nowrap; }
+    .back-link:hover { color: var(--fg); }
+    header h1 { font-size: 1.1rem; font-weight: 900; color: var(--green-bright); letter-spacing: 0.06em; text-transform: uppercase; font-style: italic; flex: 1; min-width: 120px; }
+    #saveStatus { font-size: 0.78rem; color: var(--fg-muted); white-space: nowrap; }
+    #saveStatus.saved { color: var(--green-text); }
+
+    .content { max-width: 860px; margin: 0 auto; padding: 24px; }
+
+    /* ── Cards ── */
+    .card { background: var(--green-card); border: 1px solid var(--green-border); border-radius: 10px; padding: 20px; margin-bottom: 20px; }
+    .card-title { font-size: 0.78rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--fg-muted); margin-bottom: 16px; }
+
+    /* ── Cup header ── */
+    .cup-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; }
+    .cup-name { font-size: 1.05rem; font-weight: 700; color: var(--green-text); }
+    .cup-meta { font-size: 0.73rem; color: var(--fg-muted); margin-top: 3px; }
+
+    /* ── Match list ── */
+    .match-list { margin-bottom: 14px; }
+    .match-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 7px 10px; background: #0a1a0e; border-radius: 5px; margin-bottom: 4px;
+    }
+    .match-row:hover { background: #0f2215; }
+    .match-id-badge { font-size: 0.72rem; color: var(--fg-muted); background: var(--green-border); padding: 2px 6px; border-radius: 4px; white-space: nowrap; }
+    .match-name-input {
+      flex: 1; background: transparent; border: none; border-bottom: 1px solid transparent;
+      color: var(--fg); font-size: 0.88rem; font-weight: 600; padding: 1px 4px; outline: none;
+      border-radius: 0;
+    }
+    .match-name-input:focus { border-bottom-color: var(--green-accent); }
+    .no-matches { color: var(--fg-muted); font-size: 0.85rem; padding: 6px 0 10px; }
+
+    /* ── Add matches form ── */
+    .add-matches-section { border-top: 1px solid var(--green-border); padding-top: 14px; }
+    .add-matches-section label { display: block; font-size: 0.75rem; color: var(--fg-muted); margin-bottom: 6px; }
+    textarea {
+      width: 100%; background: var(--green-dark); border: 1px solid var(--green-border);
+      border-radius: 6px; color: var(--fg); font-size: 0.82rem; padding: 10px 12px;
+      resize: vertical; min-height: 80px; outline: none; font-family: inherit;
+    }
+    textarea:focus { border-color: var(--green-accent); }
+    .add-row { display: flex; gap: 8px; margin-top: 8px; }
+
+    /* ── New cup form ── */
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+    @media (max-width: 600px) { .form-grid { grid-template-columns: 1fr; } }
+    .form-field label { display: block; font-size: 0.75rem; color: var(--fg-muted); margin-bottom: 4px; }
+    input[type=text], input[type=url] {
+      width: 100%; padding: 9px 12px; background: var(--green-dark);
+      border: 1px solid var(--green-border); border-radius: 6px; color: var(--fg);
+      font-size: 0.88rem; outline: none;
+    }
+    input:focus { border-color: var(--green-accent); }
+    .parsed-box { font-size: 0.78rem; color: var(--green-text); padding: 8px 12px; background: #0a1a0e; border-radius: 5px; margin-bottom: 12px; line-height: 1.6; }
+    .parsed-box.error { color: var(--red); }
+
+    /* ── Buttons ── */
+    .btn { padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 600; border: none; white-space: nowrap; }
+    .btn-primary { background: var(--green-accent); color: #fff; }
+    .btn-primary:hover { background: var(--green-bright); }
+    .btn-ghost { background: transparent; border: 1px solid var(--green-border); color: var(--fg-muted); }
+    .btn-ghost:hover { border-color: var(--green-accent); color: var(--fg); }
+    .btn-sm { padding: 4px 10px; font-size: 0.75rem; }
+    .btn-danger { background: #2c1515; border: 1px solid #5a2d2d; color: var(--red); }
+    .btn-danger:hover { background: #3c1a1a; }
+    .btn-export { background: var(--green-mid); border: 1px solid var(--green-accent); color: var(--green-text); }
+    .btn-export:hover { background: var(--green-accent); color: #fff; }
+
+    .section-label { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--fg-muted); margin-bottom: 12px; }
+  </style>
+</head>
+<body>
+
+<!-- ── Password overlay ── -->
+<div id="passwordOverlay">
+  <div class="logo-text">Kvarnby P11</div>
+  <h2>Ange lösenord för att fortsätta</h2>
+  <form id="pwForm">
+    <input type="password" id="pwInput" placeholder="••••" autocomplete="off" inputmode="numeric" />
+    <button type="submit" id="pwBtn">Logga in</button>
+  </form>
+</div>
+
+<!-- ── Admin ── -->
+<div id="mainApp">
+  <header>
+    <a class="back-link" href="index.html">← Tillbaka</a>
+    <h1>Admin – Matchkonfiguration</h1>
+    <span id="saveStatus"></span>
+    <button type="button" class="btn btn-export" onclick="downloadMatchesJs()">⬇ Exportera matches.js</button>
+  </header>
+
+  <div class="content">
+    <div class="section-label">Konfigurerade cupar</div>
+    <div id="cupsList"></div>
+
+    <!-- New cup -->
+    <div class="card">
+      <div class="card-title">Lägg till ny cup</div>
+
+      <div class="form-grid">
+        <div class="form-field">
+          <label>Cupnamn</label>
+          <input type="text" id="newCupName" placeholder="t.ex. Göteborgs Basketfestival 2026" />
+        </div>
+        <div class="form-field">
+          <label>Klistra in en match-URL från cupen</label>
+          <input type="url" id="newCupUrl" placeholder="https://basketballfestival.se/rest/results_api/call?call=Match..." />
+        </div>
+      </div>
+
+      <div id="newCupParsed" style="display:none"></div>
+
+      <button type="button" class="btn btn-primary" onclick="addCup()">+ Skapa cup</button>
+    </div>
+  </div>
+</div>
+
+<script src="matches.js"></script>
+<script>
+  const CORRECT_PW = '1967';
+  const STORAGE_KEY = 'kvarnby_match_config';
+
+  // ── Password ──────────────────────────────────────────────────────────────
+  function unlock() {
+    document.getElementById('passwordOverlay').style.display = 'none';
+    document.getElementById('mainApp').style.display = 'block';
+    initConfig();
+    renderCups();
+  }
+
+  if (sessionStorage.getItem('kvarby_auth') === '1') unlock();
+  document.getElementById('pwForm').addEventListener('submit', e => {
+    e.preventDefault();
+    if (document.getElementById('pwInput').value === CORRECT_PW) {
+      unlock();
+    } else {
+      const inp = document.getElementById('pwInput');
+      inp.classList.add('error'); inp.value = '';
+      setTimeout(() => inp.classList.remove('error'), 400);
+    }
+  });
+
+  // ── State ─────────────────────────────────────────────────────────────────
+  let config = { cups: [] };
+
+  function initConfig() {
+    // Priority: localStorage → matches.js
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) { config = JSON.parse(stored); return; }
+    } catch {}
+
+    const src = window.MATCH_CONFIG;
+    if (!src) return;
+
+    if (src.cups) {
+      config = JSON.parse(JSON.stringify(src));
+    } else {
+      // Migrate old flat format
+      config = { cups: [{ name: src.cup || 'Cup', baseUrl: 'https://lampechallenge.cupmanager.net/rest/results_api/call', tournamentId: src.tournamentId, matches: JSON.parse(JSON.stringify(src.matches || [])) }] };
+    }
+  }
+
+  // ── Persistence ───────────────────────────────────────────────────────────
+  let saveTimer;
+  function save() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+      const el = document.getElementById('saveStatus');
+      el.textContent = '✓ Sparat';
+      el.className = 'saved';
+      setTimeout(() => { el.textContent = ''; el.className = ''; }, 2000);
+    }, 300);
+  }
+
+  // ── URL parsing ───────────────────────────────────────────────────────────
+  function parseMatchUrl(urlStr) {
+    try {
+      const u = new URL(urlStr.trim());
+      const baseUrl = u.origin + u.pathname;
+      const callParam = decodeURIComponent(u.searchParams.get('call') || '');
+      const m = callParam.match(/Match\(\{id:(\d+)\}/);
+      const matchId = m ? parseInt(m[1]) : null;
+      const tournamentId = parseInt(u.searchParams.get('tournamentId')) || null;
+      return { baseUrl, matchId, tournamentId, valid: !!(baseUrl && tournamentId) };
+    } catch { return { valid: false }; }
+  }
+
+  function parseInputToMatches(text) {
+    const results = [];
+    const seen = new Set();
+    for (const line of text.split(/[\n,]+/).map(s => s.trim()).filter(Boolean)) {
+      let id;
+      if (line.startsWith('http')) {
+        const p = parseMatchUrl(line);
+        id = p.matchId;
+      } else {
+        id = parseInt(line);
+      }
+      if (id && !isNaN(id) && !seen.has(id)) {
+        seen.add(id);
+        results.push(id);
+      }
+    }
+    return results;
+  }
+
+  // ── New cup ───────────────────────────────────────────────────────────────
+  let pendingCup = {};
+
+  document.getElementById('newCupUrl').addEventListener('input', () => {
+    const val = document.getElementById('newCupUrl').value;
+    if (!val.includes('http')) return;
+    const p = parseMatchUrl(val);
+    const el = document.getElementById('newCupParsed');
+    if (!p.valid) {
+      el.innerHTML = `<div class="parsed-box error">Ogiltig URL.</div>`;
+    } else {
+      pendingCup = p;
+      el.innerHTML = `<div class="parsed-box">API: <strong>${esc(p.baseUrl)}</strong> · Tournament ID: <strong>${p.tournamentId}</strong>${p.matchId ? ` · Första match-ID: <strong style="color:var(--gold)">${p.matchId}</strong>` : ''}</div>`;
+    }
+    el.style.display = 'block';
+  });
+
+  function addCup() {
+    const name = document.getElementById('newCupName').value.trim();
+    if (!name) { alert('Ange ett cupnamn.'); return; }
+    if (!pendingCup.valid) { alert('Klistra in en giltig match-URL för att få API-information.'); return; }
+
+    config.cups.push({
+      name,
+      baseUrl: pendingCup.baseUrl,
+      tournamentId: pendingCup.tournamentId,
+      matches: pendingCup.matchId ? [{ id: pendingCup.matchId, name: `Match ${pendingCup.matchId}` }] : []
+    });
+
+    document.getElementById('newCupName').value = '';
+    document.getElementById('newCupUrl').value = '';
+    document.getElementById('newCupParsed').style.display = 'none';
+    pendingCup = {};
+    save(); renderCups();
+  }
+
+  // ── Cup / match management ────────────────────────────────────────────────
+  function removeCup(i) {
+    if (!confirm(`Ta bort cup "${config.cups[i].name}"?`)) return;
+    config.cups.splice(i, 1);
+    save(); renderCups();
+  }
+
+  function updateMatchName(cupIdx, matchIdx, val) {
+    config.cups[cupIdx].matches[matchIdx].name = val;
+    save();
+  }
+
+  function removeMatch(cupIdx, matchIdx) {
+    config.cups[cupIdx].matches.splice(matchIdx, 1);
+    save(); renderCups();
+  }
+
+  function addMatches(cupIdx) {
+    const ta = document.getElementById(`ta_${cupIdx}`);
+    const ids = parseInputToMatches(ta.value);
+    if (!ids.length) { alert('Inga giltiga match-ID:n eller URL:er hittades.'); return; }
+
+    const cup = config.cups[cupIdx];
+    let added = 0;
+    for (const id of ids) {
+      if (!cup.matches.find(m => m.id === id)) {
+        cup.matches.push({ id, name: `Match ${id}` });
+        added++;
+      }
+    }
+
+    if (!added) { alert('Alla angivna matcher finns redan i cupen.'); return; }
+    ta.value = '';
+    save(); renderCups();
+  }
+
+  // ── Render ────────────────────────────────────────────────────────────────
+  function renderCups() {
+    const el = document.getElementById('cupsList');
+    if (!config.cups.length) {
+      el.innerHTML = `<p style="color:var(--fg-muted);font-size:0.88rem;margin-bottom:20px">Inga cupar ännu. Skapa en nedan.</p>`;
+      return;
+    }
+
+    el.innerHTML = config.cups.map((cup, ci) => {
+      const host = (() => { try { return new URL(cup.baseUrl).hostname; } catch { return cup.baseUrl; } })();
+      return `
+      <div class="card">
+        <div class="cup-header">
+          <div>
+            <div class="cup-name">${esc(cup.name)}</div>
+            <div class="cup-meta">${esc(host)} · tournamentId: ${cup.tournamentId}</div>
+          </div>
+          <button type="button" class="btn btn-danger btn-sm" onclick="removeCup(${ci})">Ta bort cup</button>
+        </div>
+
+        <div class="match-list">
+          ${cup.matches.length ? cup.matches.map((m, mi) => `
+            <div class="match-row">
+              <span class="match-id-badge">#${m.id}</span>
+              <input class="match-name-input" type="text" value="${esc(m.name)}"
+                placeholder="Matchnamn..."
+                onblur="updateMatchName(${ci},${mi},this.value)"
+                onkeydown="if(event.key==='Enter')this.blur()" />
+              <button type="button" class="btn btn-danger btn-sm" onclick="removeMatch(${ci},${mi})">✕</button>
+            </div>`).join('')
+          : `<div class="no-matches">Inga matcher än. Lägg till nedan.</div>`}
+        </div>
+
+        <div class="add-matches-section">
+          <label>Klistra in match-URL:er eller ID:n — ett per rad, eller kommaseparerat</label>
+          <textarea id="ta_${ci}" placeholder="https://lampechallenge.cupmanager.net/rest/results_api/call?call=Match%28%7Bid%3A79270767%7D%29...&#10;79270769&#10;79270840"></textarea>
+          <div class="add-row">
+            <button type="button" class="btn btn-primary" onclick="addMatches(${ci})">+ Lägg till matcher</button>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  // ── Export ────────────────────────────────────────────────────────────────
+  function generateMatchesJs() {
+    return `// Redigeras via admin.html eller direkt här.\n// Varje cup har ett eget API (baseUrl + tournamentId).\nwindow.MATCH_CONFIG = ${JSON.stringify({ cups: config.cups }, null, 2)};\n`;
+  }
+
+  function downloadMatchesJs() {
+    const blob = new Blob([generateMatchesJs()], { type: 'text/javascript' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'matches.js'; a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function esc(str) {
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+</script>
+</body>
+</html>

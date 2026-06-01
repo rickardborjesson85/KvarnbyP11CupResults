@@ -1,0 +1,1042 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kvarnby Basket P11 – Cup Statistik</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --green-dark:   #0d1f12;
+      --green-card:   #122518;
+      --green-border: #1e3d28;
+      --green-mid:    #1f5c36;
+      --green-accent: #2e8b57;
+      --green-bright: #3cb371;
+      --green-text:   #6fcf97;
+      --red:          #fc8181;
+      --gold:         #f6c90e;
+      --fg:           #e2e8f0;
+      --fg-muted:     #8aaa96;
+    }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--green-dark);
+      color: var(--fg);
+      min-height: 100vh;
+    }
+
+    /* ── Password overlay ───────────────────────────────── */
+    #passwordOverlay {
+      position: fixed;
+      inset: 0;
+      background: var(--green-dark);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 24px;
+    }
+    #passwordOverlay .logo-wrap {
+      margin-bottom: 32px;
+      text-align: center;
+    }
+    #passwordOverlay img.club-logo {
+      width: 140px;
+      height: 140px;
+      object-fit: contain;
+    }
+    .logo-text {
+      font-size: 2.8rem;
+      font-weight: 900;
+      letter-spacing: 0.12em;
+      color: var(--green-bright);
+      text-transform: uppercase;
+      font-style: italic;
+      line-height: 1;
+      text-shadow: 2px 2px 0 #0a1a0e, -1px -1px 0 #0a1a0e;
+    }
+    .logo-sub {
+      font-size: 0.85rem;
+      letter-spacing: 0.25em;
+      color: var(--fg-muted);
+      margin-top: 4px;
+    }
+    #passwordOverlay h2 {
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--fg-muted);
+      margin-bottom: 20px;
+      letter-spacing: 0.05em;
+    }
+    #pwForm {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    #pwInput {
+      padding: 12px 16px;
+      background: var(--green-card);
+      border: 1px solid var(--green-border);
+      border-radius: 8px;
+      color: var(--fg);
+      font-size: 1.1rem;
+      letter-spacing: 0.15em;
+      width: 160px;
+      text-align: center;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    #pwInput:focus { border-color: var(--green-accent); }
+    #pwInput.error { border-color: var(--red); animation: shake 0.3s; }
+    @keyframes shake {
+      0%,100% { transform: translateX(0); }
+      25% { transform: translateX(-6px); }
+      75% { transform: translateX(6px); }
+    }
+    #pwBtn {
+      padding: 12px 24px;
+      background: var(--green-accent);
+      color: #fff;
+      font-weight: 700;
+      font-size: 0.95rem;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    #pwBtn:hover { background: var(--green-bright); }
+
+    /* ── Main app ───────────────────────────────────────── */
+    #mainApp { display: none; }
+
+    header {
+      background: linear-gradient(135deg, #0a1a0e, var(--green-card));
+      border-bottom: 2px solid var(--green-accent);
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    header img.club-logo {
+      width: 48px;
+      height: 48px;
+      object-fit: contain;
+    }
+    header .header-text h1 {
+      font-size: 1.25rem;
+      font-weight: 900;
+      color: var(--green-bright);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-style: italic;
+    }
+    header .header-text p {
+      font-size: 0.7rem;
+      color: var(--fg-muted);
+      letter-spacing: 0.2em;
+    }
+    #refreshBtn {
+      margin-left: auto;
+      padding: 8px 14px;
+      background: transparent;
+      border: 1px solid var(--green-border);
+      border-radius: 8px;
+      color: var(--fg-muted);
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: all 0.15s;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    #refreshBtn:hover { border-color: var(--green-accent); color: var(--fg); }
+    #refreshBtn.spinning { animation: spin 1s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .game-tabs {
+      padding: 12px 24px 0;
+      background: var(--green-dark);
+    }
+    .cup-selector {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+    }
+    .cup-pill {
+      padding: 5px 14px;
+      border-radius: 20px;
+      border: 1px solid var(--green-border);
+      background: var(--green-card);
+      color: var(--fg-muted);
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .cup-pill:hover { border-color: var(--green-accent); color: var(--fg); }
+    .cup-pill.active {
+      background: var(--green-accent);
+      border-color: var(--green-accent);
+      color: #fff;
+    }
+    .match-select-wrap { position: relative; padding-bottom: 0; }
+    .match-select {
+      width: 100%;
+      padding: 10px 40px 10px 14px;
+      background: var(--green-card);
+      border: 1px solid var(--green-border);
+      border-radius: 8px 8px 0 0;
+      border-bottom: none;
+      color: var(--fg);
+      font-size: 0.88rem;
+      font-weight: 600;
+      cursor: pointer;
+      outline: none;
+      -webkit-appearance: none;
+      appearance: none;
+    }
+    .match-select:focus { border-color: var(--green-accent); }
+    .match-select-wrap::after {
+      content: '▾';
+      position: absolute;
+      right: 14px; top: 50%;
+      transform: translateY(-50%);
+      color: var(--fg-muted);
+      pointer-events: none;
+      font-size: 1rem;
+    }
+
+    .game-content {
+      padding: 0 24px 32px;
+      background: var(--green-mid);
+      border: 1px solid var(--green-border);
+      border-top: none;
+      display: none;
+    }
+    .game-content.active { display: block; }
+
+    /* ── Score banner ───────────────────────────────────── */
+    .score-banner {
+      background: linear-gradient(135deg, #0a1a0e, var(--green-card));
+      margin: 0 -24px 16px;
+      border-bottom: 1px solid var(--green-border);
+    }
+    .match-header-meta {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      padding: 12px 24px 0;
+      font-size: 0.75rem;
+      color: var(--fg-muted);
+      letter-spacing: 0.04em;
+    }
+    .match-header-meta .meta-date {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--fg);
+    }
+    .match-header-meta .meta-sep { color: var(--green-border); }
+    .match-header-meta .meta-cup {
+      background: var(--green-border);
+      color: var(--green-text);
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 10px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+    .score-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px 0 20px;
+    }
+    .team-block { text-align: center; flex: 1; max-width: 280px; }
+    .team-name { font-size: 1rem; font-weight: 700; color: var(--fg); margin-bottom: 4px; }
+    .team-score { font-size: 3.5rem; font-weight: 800; line-height: 1; }
+    .home-score { color: var(--green-text); }
+    .away-score { color: var(--red); }
+    .score-sep { font-size: 2.5rem; font-weight: 300; color: var(--green-border); padding: 0 16px; }
+
+    .periods-row {
+      display: flex;
+      justify-content: center;
+      gap: 6px;
+      margin-bottom: 16px;
+      font-size: 0.75rem;
+      flex-wrap: wrap;
+    }
+    .period-chip {
+      background: var(--green-card);
+      border: 1px solid var(--green-border);
+      border-radius: 4px;
+      padding: 2px 8px;
+      color: var(--fg-muted);
+    }
+
+    /* ── Teams grid ─────────────────────────────────────── */
+    .teams-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    @media (max-width: 700px) { .teams-grid { grid-template-columns: 1fr; } }
+
+    .team-panel {
+      background: var(--green-card);
+      border-radius: 10px;
+      overflow: hidden;
+      border: 1px solid var(--green-border);
+    }
+    .team-panel-header {
+      padding: 10px 16px;
+      font-weight: 700;
+      font-size: 0.9rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .home-header { background: #0e2c1a; color: var(--green-text); border-bottom: 1px solid var(--green-border); }
+    .away-header { background: #2c0e0e; color: var(--red); border-bottom: 1px solid #5a2d2d; }
+
+    .stats-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.82rem;
+    }
+    .stats-table th {
+      padding: 6px 10px;
+      background: #0a1a0e;
+      color: var(--fg-muted);
+      font-weight: 600;
+      text-align: center;
+      font-size: 0.75rem;
+    }
+    .stats-table th:first-child { text-align: left; }
+    .stats-table td {
+      padding: 7px 10px;
+      border-bottom: 1px solid var(--green-border);
+      text-align: center;
+    }
+    .stats-table td:first-child { text-align: left; font-weight: 500; }
+    .stats-table tr:last-child td { border-bottom: none; }
+    .home-panel .stats-table tr:hover td { background: #1a3522; }
+    .away-panel .stats-table tr:hover td { background: #2c1515; }
+    .stats-table .total-row td {
+      background: #0a1a0e;
+      font-weight: 700;
+      color: var(--green-bright);
+      border-top: 2px solid var(--green-border);
+    }
+    .away-panel .stats-table .total-row td { color: var(--red); }
+    .away-panel .stats-table th { background: #1a0a0a; }
+    .away-panel .stats-table td { border-bottom-color: #3d1f1f; }
+
+    .pts-cell { font-weight: 700; color: var(--gold); }
+    .one-pt   { color: #90cdf4; }
+    .two-pt   { color: var(--green-text); }
+    .three-pt { color: var(--green-bright); }
+    .foul-cell { color: var(--red); font-weight: 600; }
+
+    /* ── Event timeline ─────────────────────────────────── */
+    .event-timeline {
+      margin-top: 20px; background: #000;
+      border-radius: 8px; overflow: hidden;
+      border: 1px solid #1a1a1a;
+    }
+    .event-timeline-title {
+      font-size: 0.65rem; font-weight: 700; letter-spacing: 0.12em;
+      text-transform: uppercase; color: #555; padding: 10px 12px 0;
+    }
+    .tl-names {
+      display: flex; align-items: center; padding: 6px 12px 8px;
+      border-bottom: 1px solid #1a1a1a; font-size: 0.7rem; font-weight: 700;
+    }
+    .tl-period { margin-bottom: 0; }
+    .tl-period-divider {
+      display: flex; align-items: center; gap: 0;
+      background: #111; border-top: 1px solid #222; border-bottom: 1px solid #222;
+      padding: 6px 12px; margin-top: 2px;
+    }
+    .tl-period-tag {
+      font-size: 0.72rem; font-weight: 900; letter-spacing: 0.1em;
+      color: #fff; background: #222; border-radius: 4px;
+      padding: 2px 8px; text-align: center; flex-shrink: 0;
+    }
+    .tl-period-pts-home {
+      flex: 1; text-align: right; padding-right: 10px;
+      font-size: 0.78rem; font-weight: 700; color: var(--green-text);
+    }
+    .tl-period-pts-away {
+      flex: 1; text-align: left; padding-left: 10px;
+      font-size: 0.78rem; font-weight: 700; color: var(--red);
+    }
+    .tl-row {
+      display: flex; align-items: center; gap: 0;
+      padding: 4px 12px; border-bottom: 1px solid #0d0d0d; font-size: 0.78rem;
+    }
+    .tl-row:last-child { border-bottom: none; }
+    .tl-home {
+      flex: 1; text-align: right; padding-right: 8px;
+      color: #444; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .tl-away {
+      flex: 1; text-align: left; padding-left: 8px;
+      color: #444; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .tl-row.home-ev .tl-home { color: var(--green-text); font-weight: 600; }
+    .tl-row.away-ev .tl-away { color: var(--red); font-weight: 600; }
+    .tl-score {
+      min-width: 58px; text-align: center; flex-shrink: 0;
+      font-size: 0.7rem; font-weight: 700; color: #666;
+      background: #111; border-radius: 4px; padding: 2px 4px;
+    }
+    .ev-1pt { color: #90cdf4; font-weight: 700; }
+    .ev-2pt { color: var(--green-text); font-weight: 700; }
+    .ev-3pt { color: var(--green-bright); font-weight: 700; }
+    .ev-foul { color: var(--red); font-weight: 700; }
+    .ev-to   { color: #444; }
+
+    .legend {
+      display: flex;
+      gap: 14px;
+      flex-wrap: wrap;
+      font-size: 0.73rem;
+      color: var(--fg-muted);
+      margin-bottom: 14px;
+      padding: 8px 12px;
+      background: var(--green-card);
+      border-radius: 6px;
+      border: 1px solid var(--green-border);
+    }
+    .legend span { display: flex; align-items: center; gap: 4px; }
+
+    .empty-state {
+      text-align: center;
+      padding: 80px 24px;
+      color: var(--green-border);
+    }
+    .empty-state .icon { font-size: 4rem; margin-bottom: 16px; }
+    .empty-state p { font-size: 1rem; }
+  </style>
+</head>
+<body>
+
+<!-- ── Password overlay ──────────────────────────────────── -->
+<div id="passwordOverlay">
+  <div class="logo-wrap">
+    <img class="club-logo" src="logo.png" alt="Kvarnby" onerror="this.style.display='none'">
+    <div class="logo-text">Kvarnby P11</div>
+
+  </div>
+  <h2>Ange lösenord för att fortsätta</h2>
+  <form id="pwForm">
+    <input type="password" id="pwInput" placeholder="••••" autocomplete="off" inputmode="numeric" />
+    <button type="submit" id="pwBtn">Logga in</button>
+  </form>
+</div>
+
+<!-- ── Main app ──────────────────────────────────────────── -->
+<div id="mainApp">
+  <header>
+    <img class="club-logo" src="logo.png" alt="Kvarnby" onerror="this.style.display='none'">
+    <div class="header-text">
+      <h1>Kvarnby Basket P11</h1>
+    </div>
+    <button type="button" id="refreshBtn" title="Uppdatera matchdata">↻ Uppdatera</button>
+  </header>
+
+  <div class="game-tabs" id="gameTabs"></div>
+
+  <div id="gameContents">
+    <div class="empty-state">
+      <div class="icon">🏀</div>
+      <p>Inga matcher hittades</p>
+    </div>
+  </div>
+</div>
+
+<script src="matches.js"></script>
+<script>
+  // ── Password ───────────────────────────────────────────────────────────────
+  const CORRECT_PW = '1967';
+
+  function unlock() {
+    document.getElementById('passwordOverlay').style.display = 'none';
+    document.getElementById('mainApp').style.display = 'block';
+    sessionStorage.setItem('kvarby_auth', '1');
+    loadAllMatches();
+  }
+
+  if (sessionStorage.getItem('kvarby_auth') === '1') {
+    unlock();
+  }
+
+  document.getElementById('pwForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const val = document.getElementById('pwInput').value;
+    if (val === CORRECT_PW) {
+      unlock();
+    } else {
+      const inp = document.getElementById('pwInput');
+      inp.classList.add('error');
+      inp.value = '';
+      setTimeout(() => inp.classList.remove('error'), 400);
+    }
+  });
+
+  // ── API ────────────────────────────────────────────────────────────────────
+  function buildQuery(matchId) {
+    return `Match({id:${matchId}}){home:{},away:{},feed:{events:[{}]},result:{}}`;
+  }
+
+  async function fetchMatch(matchId, baseUrl, tournamentId) {
+    const apiUrl = `${baseUrl}?call=${encodeURIComponent(buildQuery(matchId))}&lang=en&tournamentId=${tournamentId}`;
+    const proxy  = window.MATCH_CONFIG?.proxy;
+    const fetchUrl = proxy ? `${proxy}?url=${encodeURIComponent(apiUrl)}` : apiUrl;
+    const r = await fetch(fetchUrl);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return r.json();
+  }
+
+  function anyMatchLive() {
+    const now = Date.now();
+    for (const g of games) {
+      for (const [key, val] of Object.entries(g.data?.responses || {})) {
+        if (/^Match\(\{id:\d+\}\)$/.test(key) && val.entity?.__typename === 'Match') {
+          const { finished, start, duration } = val.entity;
+          if (finished) continue;
+          // Inte klar + startar inom 30 min eller har redan börjat
+          const startsWithin30min = start && (start - now) < 30 * 60 * 1000;
+          const probablyOngoing   = start && now >= start && now <= start + (duration || 5400000) + 30 * 60 * 1000;
+          if (startsWithin30min || probablyOngoing) return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  function flattenConfig(config) {
+    // New format: config.cups[]
+    if (config?.cups) {
+      return config.cups.flatMap(cup =>
+        (cup.matches || []).map(m => ({ ...m, cup: cup.name, baseUrl: cup.baseUrl, tournamentId: cup.tournamentId }))
+      );
+    }
+    // Old flat format (backward compat)
+    return (config?.matches || []).map(m => ({
+      ...m, cup: config.cup || '',
+      baseUrl: 'https://lampechallenge.cupmanager.net/rest/results_api/call',
+      tournamentId: config.tournamentId
+    }));
+  }
+
+  function getMatchStart(data) {
+    for (const [key, val] of Object.entries(data.responses || {})) {
+      if (/^Match\(\{id:\d+\}\)$/.test(key) && val.entity?.__typename === 'Match') {
+        return val.entity.start || 0;
+      }
+    }
+    return 0;
+  }
+
+  function extractMatchName(data) {
+    let home = '', away = '';
+    for (const [key, val] of Object.entries(data.responses || {})) {
+      if (val.entity?.__typename !== 'MatchActor') continue;
+      const name = val.entity.name?.sv || val.entity.name?.en || '';
+      if (!name) continue;
+      if (key.includes('"home"') || key.includes('actor:"home"')) home = name;
+      if (key.includes('"away"') || key.includes('actor:"away"')) away = name;
+    }
+    return home && away ? `${home} – ${away}` : null;
+  }
+
+  let autoRefreshTimer = null;
+
+  function getActiveConfig() {
+    return window.MATCH_CONFIG;
+  }
+
+  async function loadAllMatches(silent = false) {
+    const config = getActiveConfig();
+    const contentsEl = document.getElementById('gameContents');
+    const tabsEl = document.getElementById('gameTabs');
+    const refreshBtn = document.getElementById('refreshBtn');
+
+    const allMatches = flattenConfig(config);
+    if (!allMatches.length) {
+      contentsEl.innerHTML = `<div class="empty-state"><div class="icon">⚙️</div><p>Ingen match-konfiguration. Kontrollera att matches.js är laddad.</p></div>`;
+      return;
+    }
+
+    if (refreshBtn) refreshBtn.classList.add('spinning');
+
+    if (!silent) {
+      tabsEl.innerHTML = '';
+      contentsEl.innerHTML = `<div class="empty-state"><div class="icon" style="font-size:2rem">⏳</div><p>Hämtar matchdata…</p></div>`;
+    }
+
+    const results = await Promise.allSettled(
+      allMatches.map(m => fetchMatch(m.id, m.baseUrl, m.tournamentId))
+    );
+
+    if (refreshBtn) refreshBtn.classList.remove('spinning');
+
+    games.length = 0;
+    for (let i = 0; i < results.length; i++) {
+      const r = results[i];
+      if (r.status === 'fulfilled') {
+        const name = allMatches[i].name || extractMatchName(r.value) || `Match ${allMatches[i].id}`;
+        games.push({ name, cup: allMatches[i].cup, data: r.value });
+      } else {
+        console.warn(`Match ${allMatches[i].id} misslyckades:`, r.reason);
+      }
+    }
+
+    if (games.length === 0) {
+      loadFromCache(contentsEl);
+      return;
+    }
+
+    games.sort((a, b) => getMatchStart(a.data) - getMatchStart(b.data));
+
+    render();
+
+    // Schedule next auto-refresh
+    clearTimeout(autoRefreshTimer);
+    const proxy = window.MATCH_CONFIG?.proxy;
+    const refreshInterval = proxy && anyMatchLive() ? 10 * 1000 : 10 * 60 * 1000;
+    autoRefreshTimer = setTimeout(() => loadAllMatches(true), refreshInterval);
+  }
+
+  function loadFromCache(contentsEl) {
+    function populate() {
+      const src = window.GAME_DATA || [];
+      for (const g of src) {
+        if (!games.find(x => x.name === g.name)) games.push(g);
+      }
+      if (games.length) {
+        games.sort((a, b) => getMatchStart(a.data) - getMatchStart(b.data));
+        render();
+      } else {
+        contentsEl.innerHTML = `<div class="empty-state"><div class="icon">❌</div>
+          <p>Kunde inte hämta data från API:et (CORS/fil://).<br><br>
+          Kör <code style="background:#0a1a0e;padding:2px 6px;border-radius:4px">node generate-data.js</code>
+          för att spara senaste data lokalt och ladda om sidan.</p></div>`;
+      }
+    }
+
+    if (window.GAME_DATA) {
+      populate();
+    } else {
+      const s = document.createElement('script');
+      s.src = 'jsons/data.js';
+      s.onload = populate;
+      s.onerror = () => {
+        contentsEl.innerHTML = `<div class="empty-state"><div class="icon">❌</div>
+          <p>Ingen cachad data hittades.<br><br>
+          Kör <code style="background:#0a1a0e;padding:2px 6px;border-radius:4px">node generate-data.js</code>
+          för att hämta matchdata och ladda om sidan.</p></div>`;
+      };
+      document.head.appendChild(s);
+    }
+  }
+
+  // ── State ──────────────────────────────────────────────────────────────────
+  const games = [];
+
+  // ── API response parser ────────────────────────────────────────────────────
+  function parseGame(data) {
+    const responses = data.responses || {};
+    let homeTeamName = 'Hemmalag';
+    let awayTeamName = 'Bortalag';
+    let matchDate = null;
+
+    const goals = [];
+    const fouls = [];
+    const events = [];
+
+    for (const [key, val] of Object.entries(responses)) {
+      const entity = val.entity;
+      if (!entity) continue;
+
+      // Match start time for date display
+      if (/^Match\(\{id:\d+\}\)$/.test(key) && entity.__typename === 'Match') {
+        if (!matchDate && entity.start) matchDate = new Date(entity.start);
+      }
+
+      // Team names
+      if (key.startsWith('MatchActor(') && entity.__typename === 'MatchActor') {
+        const isHome = key.includes('"home"') || key.includes("actor:\"home\"");
+        const isAway = key.includes('"away"') || key.includes("actor:\"away\"");
+        const teamName = entity.name?.sv || entity.name?.en || '';
+        if (isHome && teamName) homeTeamName = teamName;
+        if (isAway && teamName) awayTeamName = teamName;
+      }
+
+      // Match date from MatchFeed (fallback)
+      if (key.startsWith('MatchFeed(') && entity.__typename === 'MatchFeed') {
+        if (!matchDate && entity.liveStartTime) matchDate = new Date(entity.liveStartTime);
+      }
+
+      if (!key.startsWith('MatchEvent(')) continue;
+
+      // Goals
+      if (entity.__typename === 'MatchGoal') {
+        const g = {
+          playerName: entity.playerName?.trim() || 'Okänd',
+          playerNr: entity.playerNr,
+          value: entity.value,
+          side: entity.side,
+          period: entity.period,
+          homeScore: entity.homeScore,
+          awayScore: entity.awayScore,
+          time: entity.absoluteTime || 0,
+        };
+        goals.push(g);
+        events.push({ type: 'goal', ...g });
+      }
+
+      // Fouls
+      if (entity.__typename === 'MatchPlayerFoul') {
+        const f = {
+          playerName: entity.playerName?.trim() || 'Okänd',
+          playerNr: entity.playerNr,
+          side: entity.side,
+          period: entity.period,
+          foulType: entity.foulType,
+          foulCount: (entity.playerFouls || []).length + 1,
+          time: entity.absoluteTime || 0,
+        };
+        fouls.push(f);
+        events.push({ type: 'foul', ...f });
+      }
+
+      // Timeouts
+      if (entity.__typename === 'MatchTimeout') {
+        events.push({
+          type: 'timeout',
+          side: entity.side,
+          period: entity.period,
+          time: entity.absoluteTime || 0,
+        });
+      }
+    }
+
+    let finalHome = 0, finalAway = 0;
+    for (const g of goals) {
+      if (g.homeScore > finalHome) finalHome = g.homeScore;
+      if (g.awayScore > finalAway) finalAway = g.awayScore;
+    }
+
+    const periodScores = computePeriodScores(goals);
+    const homeStats = buildPlayerStats(goals.filter(g => g.side === 'home'), fouls.filter(f => f.side === 'home'));
+    const awayStats = buildPlayerStats(goals.filter(g => g.side === 'away'), fouls.filter(f => f.side === 'away'));
+    const homeEvents = events.filter(e => e.side === 'home');
+    const awayEvents = events.filter(e => e.side === 'away');
+
+    return { homeTeamName, awayTeamName, finalHome, finalAway, periodScores, homeStats, awayStats, matchDate, homeEvents, awayEvents };
+  }
+
+  function computePeriodScores(goals) {
+    const sorted = [...goals].sort((a, b) => a.time - b.time);
+    const periods = {};
+    for (const g of sorted) {
+      const p = g.period ?? 0;
+      if (!periods[p]) periods[p] = { home: 0, away: 0 };
+      if (g.side === 'home') periods[p].home += g.value;
+      else periods[p].away += g.value;
+    }
+    return periods;
+  }
+
+  function buildPlayerStats(goals, foulsArr) {
+    const players = {};
+    for (const g of goals) {
+      const key = g.playerName;
+      if (!players[key]) players[key] = { name: g.playerName, nr: g.playerNr, pt1: 0, pt2: 0, pt3: 0, fouls: 0 };
+      if (g.value === 1) players[key].pt1++;
+      else if (g.value === 2) players[key].pt2++;
+      else if (g.value === 3) players[key].pt3++;
+    }
+    for (const f of foulsArr) {
+      const key = f.playerName;
+      if (!players[key]) players[key] = { name: f.playerName, nr: f.playerNr, pt1: 0, pt2: 0, pt3: 0, fouls: 0 };
+      players[key].fouls++;
+    }
+    return Object.values(players).sort((a, b) => {
+      const pa = a.pt1 + a.pt2 * 2 + a.pt3 * 3;
+      const pb = b.pt1 + b.pt2 * 2 + b.pt3 * 3;
+      return pb - pa;
+    });
+  }
+
+  function formatDate(d) {
+    if (!d) return null;
+    return d.toLocaleDateString('sv-SE', { day: 'numeric', month: 'long', year: 'numeric' });
+  }
+
+  function formatDateShort(d) {
+    if (!d) return null;
+    return d.toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' });
+  }
+
+  function formatTime(d) {
+    if (!d) return null;
+    return d.toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  // ── Render ─────────────────────────────────────────────────────────────────
+  let activeCup = null;
+  let activeMatchIdx = null;
+
+  function render() {
+    const tabsEl = document.getElementById('gameTabs');
+    const contentsEl = document.getElementById('gameContents');
+
+    if (games.length === 0) {
+      tabsEl.innerHTML = '';
+      contentsEl.innerHTML = `<div class="empty-state"><div class="icon">🏀</div><p>Inga matcher hittades</p></div>`;
+      return;
+    }
+
+    const parsed = games.map(g => parseGame(g.data));
+
+    // Group by cup
+    const cupOrder = [];
+    const cupGroups = {};
+    parsed.forEach((p, i) => {
+      const cup = games[i].cup || '';
+      if (!cupGroups[cup]) { cupGroups[cup] = []; cupOrder.push(cup); }
+      cupGroups[cup].push({ p, i });
+    });
+
+    if (!activeCup || !cupGroups[activeCup]) activeCup = cupOrder[0];
+
+    const visibleIndices = new Set(cupGroups[activeCup].map(({ i }) => i));
+
+    // Resolve active match index
+    if (activeMatchIdx == null || !visibleIndices.has(activeMatchIdx)) {
+      activeMatchIdx = cupGroups[activeCup][0].i;
+    }
+
+    // Cup selector pills
+    const pillsHtml = cupOrder.length > 1
+      ? `<div class="cup-selector">${cupOrder.map(cup =>
+          `<button type="button" class="cup-pill${cup === activeCup ? ' active' : ''}" data-cup="${esc(cup)}">${esc(cup)}</button>`
+        ).join('')}</div>`
+      : '';
+
+    // Match dropdown
+    const selectHtml = `<div class="match-select-wrap">
+      <select class="match-select" id="matchSelect">
+        ${cupGroups[activeCup].map(({ p, i }) => {
+          const dateStr = p.matchDate ? `${formatDateShort(p.matchDate)} ${formatTime(p.matchDate)}` : '';
+          const label   = `${games[i].name}${dateStr ? '  ·  ' + dateStr : ''}`;
+          return `<option value="${i}"${i === activeMatchIdx ? ' selected' : ''}>${label}</option>`;
+        }).join('')}
+      </select>
+    </div>`;
+
+    tabsEl.innerHTML = pillsHtml + selectHtml;
+
+    contentsEl.innerHTML = parsed.map((p, i) =>
+      renderGame(p, i, i === activeMatchIdx, games[i].cup || '')
+    ).join('');
+
+    document.getElementById('matchSelect').addEventListener('change', function () {
+      activeMatchIdx = Number(this.value);
+      contentsEl.querySelectorAll('.game-content').forEach(c => c.classList.remove('active'));
+      contentsEl.querySelector(`.game-content[data-idx="${this.value}"]`).classList.add('active');
+    });
+
+    tabsEl.querySelectorAll('.cup-pill').forEach(pill => {
+      pill.addEventListener('click', () => {
+        activeCup = pill.dataset.cup;
+        activeMatchIdx = null;
+        render();
+      });
+    });
+
+    document.getElementById('refreshBtn').onclick = () => loadAllMatches(true);
+  }
+
+  function renderGame(g, idx, active, cup) {
+    const periodKeys = Object.keys(g.periodScores).sort((a, b) => Number(a) - Number(b));
+    const periodLabels = periodKeys.map(p => {
+      const label = p == 0 ? 'P1' : p == 1 ? 'P2' : p == 2 ? 'P3' : p == 3 ? 'P4' : `FT${p - 3}`;
+      const ps = g.periodScores[p];
+      return `<span class="period-chip">${label}: <b style="color:var(--green-text)">${ps.home}</b>–<b style="color:var(--red)">${ps.away}</b></span>`;
+    }).join('');
+
+    const cupLabel  = cup ? `<span class="meta-cup">${esc(cup)}</span>` : '';
+    const dateLabel = g.matchDate ? `<span class="meta-date">${formatDate(g.matchDate)} ${formatTime(g.matchDate)}</span>` : '';
+
+    const headerMeta = (dateLabel || cupLabel)
+      ? `<div class="match-header-meta">${dateLabel}${dateLabel && cupLabel ? '<span class="meta-sep">·</span>' : ''}${cupLabel}</div>`
+      : '';
+
+    return `
+<div class="game-content${active ? ' active' : ''}" data-idx="${idx}">
+  <div class="score-banner">
+    ${headerMeta}
+    <div class="score-row">
+      <div class="team-block">
+        <div class="team-name">${esc(g.homeTeamName)}</div>
+        <div class="team-score home-score">${g.finalHome}</div>
+      </div>
+      <div class="score-sep">–</div>
+      <div class="team-block">
+        <div class="team-name">${esc(g.awayTeamName)}</div>
+        <div class="team-score away-score">${g.finalAway}</div>
+      </div>
+    </div>
+  </div>
+  ${periodKeys.length ? `<div class="periods-row">${periodLabels}</div>` : ''}
+
+  <div class="legend">
+    <span><span style="color:var(--gold)">PTS</span> Totala poäng</span>
+    <span><span class="one-pt">1PT</span> Frikast</span>
+    <span><span class="two-pt">2PT</span> Tvåpoängare</span>
+    <span><span class="three-pt">3PT</span> Trepoängare</span>
+    <span><span class="foul-cell">Foul</span> </span>
+  </div>
+
+  <div class="teams-grid">
+    ${renderTeamPanel(g.homeTeamName, g.homeStats, 'home')}
+    ${renderTeamPanel(g.awayTeamName, g.awayStats, 'away')}
+  </div>
+  ${renderEventTimeline(g.homeEvents, g.awayEvents, g.homeTeamName, g.awayTeamName, g.periodScores)}
+</div>`;
+  }
+
+  function periodLabel(p) {
+    return p == 0 ? 'P1' : p == 1 ? 'P2' : p == 2 ? 'P3' : p == 3 ? 'P4' : `FT${p - 3}`;
+  }
+
+  function renderEventTimeline(homeEvents, awayEvents, homeTeam, awayTeam, periodScores) {
+    const all = [...(homeEvents || []), ...(awayEvents || [])];
+    if (!all.length) return '';
+
+    const byPeriod = {};
+    for (const e of all) {
+      const p = e.period ?? 0;
+      if (!byPeriod[p]) byPeriod[p] = [];
+      byPeriod[p].push(e);
+    }
+    const periods = Object.keys(byPeriod).sort((a, b) => Number(b) - Number(a));
+
+    return `<div class="event-timeline">
+      <div class="event-timeline-title">Händelselogg</div>
+      <div class="tl-names">
+        <div class="tl-home" style="color:var(--green-text)">${esc(homeTeam)}</div>
+        <div class="tl-score"></div>
+        <div class="tl-away" style="color:var(--red)">${esc(awayTeam)}</div>
+      </div>
+      ${periods.map(p => {
+        const evs = byPeriod[p].slice().sort((a, b) => b.time - a.time);
+        const ps  = (periodScores || {})[p] || { home: 0, away: 0 };
+        return `<div class="tl-period">
+          <div class="tl-period-divider">
+            <div class="tl-period-pts-home">${ps.home} p</div>
+            <div class="tl-period-tag">${periodLabel(Number(p))}</div>
+            <div class="tl-period-pts-away">${ps.away} p</div>
+          </div>
+          ${evs.map(e => {
+            const isHome = e.side === 'home';
+            let cell = '', score = '';
+
+            if (e.type === 'goal') {
+              const ptCls = e.value === 1 ? 'ev-1pt' : e.value === 2 ? 'ev-2pt' : 'ev-3pt';
+              const pt    = e.value === 1 ? '1pt' : e.value === 2 ? '2pt' : '3pt';
+              cell  = `🏀 #${e.playerNr} ${esc(e.playerName)} <span class="${ptCls}">${pt}</span>`;
+              score = `${e.homeScore}–${e.awayScore}`;
+            } else if (e.type === 'foul') {
+              const ft = e.foulType === 'personal' ? 'PF' : e.foulType === 'technical' ? 'TF' : e.foulType === 'unsportsmanlike' ? 'UF' : 'F';
+              cell = `⚠ #${e.playerNr} ${esc(e.playerName)} <span class="ev-foul">${ft} (${e.foulCount})</span>`;
+            } else if (e.type === 'timeout') {
+              cell = `<span class="ev-to">⏸ Timeout</span>`;
+            }
+
+            return `<div class="tl-row ${isHome ? 'home-ev' : 'away-ev'}">
+              <div class="tl-home">${isHome ? cell : ''}</div>
+              <div class="tl-score">${score}</div>
+              <div class="tl-away">${!isHome ? cell : ''}</div>
+            </div>`;
+          }).join('')}
+        </div>`;
+      }).join('')}
+    </div>`;
+  }
+
+  function renderTeamPanel(teamName, players, side) {
+    const isHome = side === 'home';
+    const headerClass = isHome ? 'home-header' : 'away-header';
+    const totalPts   = players.reduce((s, p) => s + p.pt1 + p.pt2 * 2 + p.pt3 * 3, 0);
+    const total1     = players.reduce((s, p) => s + p.pt1, 0);
+    const total2     = players.reduce((s, p) => s + p.pt2, 0);
+    const total3     = players.reduce((s, p) => s + p.pt3, 0);
+    const totalFouls = players.reduce((s, p) => s + p.fouls, 0);
+
+    const rows = players.map(p => {
+      const pts = p.pt1 + p.pt2 * 2 + p.pt3 * 3;
+      return `<tr>
+        <td>#${p.nr ?? '?'} ${esc(p.name)}</td>
+        <td class="pts-cell">${pts}</td>
+        <td class="one-pt">${p.pt1 > 0 ? p.pt1 : '–'}</td>
+        <td class="two-pt">${p.pt2 > 0 ? p.pt2 : '–'}</td>
+        <td class="three-pt">${p.pt3 > 0 ? p.pt3 : '–'}</td>
+        <td class="foul-cell">${p.fouls > 0 ? p.fouls : '–'}</td>
+      </tr>`;
+    }).join('');
+
+    return `
+<div class="team-panel ${isHome ? 'home-panel' : 'away-panel'}">
+  <div class="team-panel-header ${headerClass}">
+    <span>${esc(teamName)}</span>
+    <span>${totalPts} poäng</span>
+  </div>
+  <table class="stats-table">
+    <thead>
+      <tr>
+        <th>Spelare</th>
+        <th>PTS</th>
+        <th class="one-pt">1PT</th>
+        <th class="two-pt">2PT</th>
+        <th class="three-pt">3PT</th>
+        <th class="foul-cell">FOUL</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${rows}
+      <tr class="total-row">
+        <td>LAGTOTAL</td>
+        <td class="pts-cell">${totalPts}</td>
+        <td class="one-pt">${total1 > 0 ? total1 : '–'}</td>
+        <td class="two-pt">${total2 > 0 ? total2 : '–'}</td>
+        <td class="three-pt">${total3 > 0 ? total3 : '–'}</td>
+        <td class="foul-cell">${totalFouls > 0 ? totalFouls : '–'}</td>
+      </tr>
+    </tbody>
+  </table>
+</div>`;
+  }
+
+  function esc(str) {
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+</script>
+</body>
+</html>
