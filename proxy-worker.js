@@ -7,7 +7,7 @@
 // 4. Kopiera worker-URL:en (t.ex. https://kvarnby-proxy.your-name.workers.dev)
 // 5. Lägg till den i matches.js som: proxy: "https://kvarnby-proxy.your-name.workers.dev"
 
-const ALLOWED_HOSTS = ['cupmanager.net', 'basketballfestival.se'];
+const ALLOWED_HOSTS = ['cupmanager.net', 'basketballfestival.se', 'cph-invitational.dk'];
 
 export default {
   async fetch(req) {
