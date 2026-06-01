@@ -1,6 +1,7 @@
 // Lägg till cupar och match-ID:n här.
 // Namn hämtas automatiskt från API:et.
 window.MATCH_CONFIG = {
+  proxy: "",  // ← klistra in din Cloudflare Worker-URL här
   cups: [
     {
       name: "Lampe 2026",
