@@ -532,7 +532,12 @@
     return callApi(buildQuery(matchId), baseUrl, tournamentId);
   }
 
+  const _teamCache = {};
   async function fetchTeamMatchIds(teamId, baseUrl, tournamentId) {
+    const cKey = `${teamId}_${tournamentId}`;
+    const cached = _teamCache[cKey];
+    if (cached && Date.now() - cached.ts < 5 * 60 * 1000) return cached.val;
+
     const query = `Team({id:${teamId}}){matches:[{home:{},away:{},result:{}}]}`;
     const data  = await callApi(query, baseUrl, tournamentId);
     const ids   = new Set();
@@ -544,7 +549,17 @@
         teamName = val.entity.name?.clubName || val.entity.name?.fullName || teamName;
       }
     }
-    return { ids: [...ids], teamName };
+    const result = { ids: [...ids], teamName };
+    _teamCache[cKey] = { val: result, ts: Date.now() };
+    return result;
+  }
+
+  function getMatchId(data) {
+    for (const key of Object.keys(data.responses || {})) {
+      const m = key.match(/^Match\(\{id:(\d+)\}\)$/);
+      if (m) return parseInt(m[1]);
+    }
+    return null;
   }
 
   function anyMatchLive() {
@@ -606,8 +621,6 @@
     return home && away ? `${home} – ${away}` : null;
   }
 
-  let autoRefreshTimer = null;
-
   function getActiveConfig() {
     return window.MATCH_CONFIG;
   }
@@ -649,7 +662,7 @@
       if (r.status === 'fulfilled') {
         const m    = toFetch[i];
         const name = m.name || extractMatchName(r.value) || `Match ${m.id}`;
-        games.push({ name, cup: m.cup, teamId: m.teamId, teamName: m.teamName, data: r.value });
+        games.push({ name, cup: m.cup, teamId: m.teamId, teamName: m.teamName, baseUrl: m.baseUrl, tournamentId: m.tournamentId, data: r.value });
       } else {
         console.warn(`Match ${toFetch[i].id} misslyckades:`, r.reason);
       }
@@ -659,11 +672,7 @@
 
     games.sort((a, b) => getMatchStart(a.data) - getMatchStart(b.data));
     render();
-
-    clearTimeout(autoRefreshTimer);
-    const proxy = window.MATCH_CONFIG?.proxy;
-    const refreshInterval = proxy && anyMatchLive() ? 10 * 1000 : 10 * 60 * 1000;
-    autoRefreshTimer = setTimeout(() => loadAllMatches(true), refreshInterval);
+    scheduleRefresh();
   }
 
   function loadFromCache(contentsEl) {
@@ -701,6 +710,53 @@
 
   // ── State ──────────────────────────────────────────────────────────────────
   const games = [];
+
+  // ── Smart refresh: bara synlig match ──────────────────────────────────────
+  let autoRefreshTimer = null;
+
+  function scheduleRefresh() {
+    clearTimeout(autoRefreshTimer);
+    const proxy    = window.MATCH_CONFIG?.proxy;
+    const interval = proxy && anyMatchLive() ? 10 * 1000 : 10 * 60 * 1000;
+    autoRefreshTimer = setTimeout(refreshVisibleMatch, interval);
+  }
+
+  async function refreshVisibleMatch() {
+    const idx = activeMatchIdx;
+    const g   = (idx !== null) ? games[idx] : null;
+
+    if (!g?.baseUrl) {
+      // Ingen match vald eller saknar info — full refresh
+      loadAllMatches(true);
+      return;
+    }
+
+    const refreshBtn = document.getElementById('refreshBtn');
+    if (refreshBtn) refreshBtn.classList.add('spinning');
+
+    try {
+      const matchId = getMatchId(g.data);
+      if (matchId) {
+        const newData = await fetchMatch(matchId, g.baseUrl, g.tournamentId);
+        games[idx].data = newData;
+
+        // Uppdatera bara den aktiva panelen
+        const panel = document.getElementById('gameContents')
+          ?.querySelector(`.game-content[data-idx="${idx}"]`);
+        if (panel) {
+          const parsed = parseGame(newData);
+          const tmp = document.createElement('div');
+          tmp.innerHTML = renderGame(parsed, idx, true, g.cup);
+          panel.replaceWith(tmp.firstElementChild);
+        }
+      }
+    } catch (e) {
+      console.warn('Refresh misslyckades:', e.message);
+    }
+
+    if (refreshBtn) refreshBtn.classList.remove('spinning');
+    scheduleRefresh();
+  }
 
   // ── API response parser ────────────────────────────────────────────────────
   function parseGame(data) {
