@@ -34,6 +34,14 @@ window.MATCH_CONFIG = {
         { id: 77537000 },
         { id: 77536999 },
       ]
+    },
+        {
+      name: "Södertälje 2025",
+      baseUrl: "https://sodertaljeopen.cupmanager.net/rest/results_api/call",
+      tournamentId: 61818160,
+      matches: [
+        { id: 72771194 }
+      ]
     }
   ]
 };
