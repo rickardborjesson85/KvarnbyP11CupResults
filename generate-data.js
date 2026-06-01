@@ -39,7 +39,7 @@ function extractMatchName(data) {
 }
 
 function buildQuery(id) {
-  return `Match({id:${id}}){home:{team:{club:{nation:{}}}},away:{team:{club:{nation:{}}}},feed:{statistics:{},events:[{}]},result:{}}`;
+  return `Match({id:${id}}){home:{team:{club:{nation:{}},statistics:{}}},away:{team:{club:{nation:{}},statistics:{}}},feed:{statistics:{},events:[{}]},result:{}}`;
 }
 
 function fetchJson(url) {

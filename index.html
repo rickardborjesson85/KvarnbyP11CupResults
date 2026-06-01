@@ -509,7 +509,7 @@
 
   // ── API ────────────────────────────────────────────────────────────────────
   function buildQuery(matchId) {
-    return `Match({id:${matchId}}){home:{team:{club:{nation:{}}}},away:{team:{club:{nation:{}}}},feed:{statistics:{},events:[{}]},result:{}}`;
+    return `Match({id:${matchId}}){home:{team:{club:{nation:{}},statistics:{}}},away:{team:{club:{nation:{}},statistics:{}}},feed:{statistics:{},events:[{}]},result:{}}`;
   }
 
   function flagEmoji(code) {
@@ -904,30 +904,69 @@
   }
 
   function parseStatistics(responses) {
+    const sortPlayers = obj => Object.values(obj).sort((a, b) =>
+      (b.pt1 + b.pt2 * 2 + b.pt3 * 3) - (a.pt1 + a.pt2 * 2 + a.pt3 * 3)
+    );
+
+    function addPlayer(map, p) {
+      const key = p.name;
+      if (!key) return;
+      if (!map[key]) map[key] = { name: p.name, nr: p.shirtNr ?? 0, pt1: 0, pt2: 0, pt3: 0, fouls: 0 };
+      map[key].pt1   += p.onePointers   || 0;
+      map[key].pt2   += p.twoPointers   || 0;
+      map[key].pt3   += p.threePointers || 0;
+      map[key].fouls += (p.fouls || []).length;
+    }
+
+    // Hämta lag-hrefs tidigt (behövs för roster-merge)
+    let homeTeamHref = null, awayTeamHref = null;
     for (const [key, val] of Object.entries(responses)) {
-      if (!key.endsWith('$statistics') || !val.entity?.periods) continue;
+      if (val.entity?.__typename !== 'MatchActor') continue;
+      const href = val.entity.team?.href;
+      if (!href) continue;
+      if (key.includes('"home"') || key.includes('actor:"home"')) homeTeamHref = href;
+      if (key.includes('"away"') || key.includes('actor:"away"')) awayTeamHref = href;
+    }
+
+    function mergeRoster(map, teamHref) {
+      if (!teamHref) return;
+      const statsEntity = responses[`${teamHref}$statistics`]?.entity;
+      for (const p of (statsEntity?.players || [])) {
+        if (!p.name || map[p.name]) continue;
+        map[p.name] = { name: p.name, nr: p.shirtNr ?? 0, pt1: 0, pt2: 0, pt3: 0, fouls: 0 };
+      }
+    }
+
+    // Primär: MatchFeed$statistics (per period, för spelade matcher)
+    for (const [key, val] of Object.entries(responses)) {
+      if (!key.startsWith('MatchFeed') || !key.endsWith('$statistics')) continue;
+      if (!val.entity?.periods) continue;
       const home = {}, away = {};
       for (const period of val.entity.periods) {
-        for (const p of (period.home?.players || [])) {
-          if (!home[p.name]) home[p.name] = { name: p.name, nr: p.shirtNr, pt1: 0, pt2: 0, pt3: 0, fouls: 0 };
-          home[p.name].pt1   += p.onePointers   || 0;
-          home[p.name].pt2   += p.twoPointers   || 0;
-          home[p.name].pt3   += p.threePointers || 0;
-          home[p.name].fouls += (p.fouls || []).length;
-        }
-        for (const p of (period.away?.players || [])) {
-          if (!away[p.name]) away[p.name] = { name: p.name, nr: p.shirtNr, pt1: 0, pt2: 0, pt3: 0, fouls: 0 };
-          away[p.name].pt1   += p.onePointers   || 0;
-          away[p.name].pt2   += p.twoPointers   || 0;
-          away[p.name].pt3   += p.threePointers || 0;
-          away[p.name].fouls += (p.fouls || []).length;
-        }
+        for (const p of (period.home?.players || [])) addPlayer(home, p);
+        for (const p of (period.away?.players || [])) addPlayer(away, p);
       }
-      const sort = obj => Object.values(obj).sort((a, b) =>
-        (b.pt1 + b.pt2 * 2 + b.pt3 * 3) - (a.pt1 + a.pt2 * 2 + a.pt3 * 3)
-      );
-      return { homeStats: sort(home), awayStats: sort(away) };
+      if (Object.keys(home).length || Object.keys(away).length) {
+        mergeRoster(home, homeTeamHref);
+        mergeRoster(away, awayTeamHref);
+        return { homeStats: sortPlayers(home), awayStats: sortPlayers(away) };
+      }
     }
+
+    // Fallback: Team$statistics (hela lagregistret, även före match)
+    function parseTeamStats(teamHref) {
+      if (!teamHref) return [];
+      const statsEntity = responses[`${teamHref}$statistics`]?.entity;
+      if (!statsEntity?.players?.length) return [];
+      const map = {};
+      for (const p of statsEntity.players) addPlayer(map, p);
+      return sortPlayers(map);
+    }
+
+    const homeStats = parseTeamStats(homeTeamHref);
+    const awayStats = parseTeamStats(awayTeamHref);
+    if (homeStats.length || awayStats.length) return { homeStats, awayStats };
+
     return null;
   }
 
