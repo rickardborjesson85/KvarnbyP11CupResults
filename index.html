@@ -186,6 +186,17 @@
       border-color: var(--green-accent);
       color: #fff;
     }
+    .team-selector {
+      display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px;
+    }
+    .team-pill {
+      padding: 4px 12px; border-radius: 20px;
+      border: 1px solid var(--green-border);
+      background: var(--green-card); color: var(--fg-muted);
+      font-size: 0.75rem; font-weight: 700; cursor: pointer; transition: all 0.15s;
+    }
+    .team-pill:hover { border-color: var(--green-accent); color: var(--fg); }
+    .team-pill.active { background: var(--green-mid); border-color: var(--green-accent); color: var(--green-text); }
     .match-select-wrap { position: relative; padding-bottom: 0; }
     .match-select {
       width: 100%;
@@ -500,13 +511,32 @@
     return `Match({id:${matchId}}){home:{},away:{},feed:{events:[{}]},result:{}}`;
   }
 
-  async function fetchMatch(matchId, baseUrl, tournamentId) {
-    const apiUrl = `${baseUrl}?call=${encodeURIComponent(buildQuery(matchId))}&lang=en&tournamentId=${tournamentId}`;
+  async function callApi(query, baseUrl, tournamentId) {
+    const apiUrl = `${baseUrl}?call=${encodeURIComponent(query)}&lang=en&tournamentId=${tournamentId}`;
     const proxy  = window.MATCH_CONFIG?.proxy;
-    const fetchUrl = proxy ? `${proxy}?url=${encodeURIComponent(apiUrl)}` : apiUrl;
-    const r = await fetch(fetchUrl);
+    const url    = proxy ? `${proxy}?url=${encodeURIComponent(apiUrl)}` : apiUrl;
+    const r = await fetch(url);
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     return r.json();
+  }
+
+  async function fetchMatch(matchId, baseUrl, tournamentId) {
+    return callApi(buildQuery(matchId), baseUrl, tournamentId);
+  }
+
+  async function fetchTeamMatchIds(teamId, baseUrl, tournamentId) {
+    const query = `Team({id:${teamId}}){matches:[{home:{},away:{},result:{}}]}`;
+    const data  = await callApi(query, baseUrl, tournamentId);
+    const ids   = new Set();
+    let teamName = `Lag ${teamId}`;
+    for (const [key, val] of Object.entries(data.responses || {})) {
+      const m = key.match(/^Match\(\{id:(\d+)\}\)$/);
+      if (m) ids.add(parseInt(m[1]));
+      if (key === `Team({id:${teamId}})` && val.entity?.__typename === 'Team') {
+        teamName = val.entity.name?.clubName || val.entity.name?.fullName || teamName;
+      }
+    }
+    return { ids: [...ids], teamName };
   }
 
   function anyMatchLive() {
@@ -526,19 +556,25 @@
     return false;
   }
 
-  function flattenConfig(config) {
-    // New format: config.cups[]
-    if (config?.cups) {
-      return config.cups.flatMap(cup =>
-        (cup.matches || []).map(m => ({ ...m, cup: cup.name, baseUrl: cup.baseUrl, tournamentId: cup.tournamentId }))
-      );
+  async function buildFetchList(config) {
+    const list = [];
+    for (const cup of (config?.cups || [])) {
+      for (const m of (cup.matches || [])) {
+        list.push({ id: m.id, name: m.name || null, cup: cup.name, baseUrl: cup.baseUrl, tournamentId: cup.tournamentId, teamId: null, teamName: null });
+      }
+      for (const teamId of (cup.teamIds || [])) {
+        try {
+          const { ids, teamName } = await fetchTeamMatchIds(teamId, cup.baseUrl, cup.tournamentId);
+          for (const id of ids) {
+            if (!list.find(m => m.id === id))
+              list.push({ id, name: null, cup: cup.name, baseUrl: cup.baseUrl, tournamentId: cup.tournamentId, teamId, teamName });
+          }
+        } catch (e) {
+          console.warn(`Lag ${teamId} misslyckades:`, e.message);
+        }
+      }
     }
-    // Old flat format (backward compat)
-    return (config?.matches || []).map(m => ({
-      ...m, cup: config.cup || '',
-      baseUrl: 'https://lampechallenge.cupmanager.net/rest/results_api/call',
-      tournamentId: config.tournamentId
-    }));
+    return list;
   }
 
   function getMatchStart(data) {
@@ -569,26 +605,32 @@
   }
 
   async function loadAllMatches(silent = false) {
-    const config = getActiveConfig();
+    const config    = getActiveConfig();
     const contentsEl = document.getElementById('gameContents');
-    const tabsEl = document.getElementById('gameTabs');
+    const tabsEl    = document.getElementById('gameTabs');
     const refreshBtn = document.getElementById('refreshBtn');
 
-    const allMatches = flattenConfig(config);
-    if (!allMatches.length) {
-      contentsEl.innerHTML = `<div class="empty-state"><div class="icon">⚙️</div><p>Ingen match-konfiguration. Kontrollera att matches.js är laddad.</p></div>`;
-      return;
-    }
-
     if (refreshBtn) refreshBtn.classList.add('spinning');
-
     if (!silent) {
       tabsEl.innerHTML = '';
       contentsEl.innerHTML = `<div class="empty-state"><div class="icon" style="font-size:2rem">⏳</div><p>Hämtar matchdata…</p></div>`;
     }
 
+    const toFetch = await buildFetchList(config);
+
+    if (!toFetch.length) {
+      if (refreshBtn) refreshBtn.classList.remove('spinning');
+      // Team-discovery misslyckades (CORS/fil://) — ladda cachad data istället
+      if (config?.cups?.length) {
+        loadFromCache(contentsEl);
+      } else {
+        contentsEl.innerHTML = `<div class="empty-state"><div class="icon">⚙️</div><p>Ingen match-konfiguration. Kontrollera att matches.js är laddad.</p></div>`;
+      }
+      return;
+    }
+
     const results = await Promise.allSettled(
-      allMatches.map(m => fetchMatch(m.id, m.baseUrl, m.tournamentId))
+      toFetch.map(m => fetchMatch(m.id, m.baseUrl, m.tournamentId))
     );
 
     if (refreshBtn) refreshBtn.classList.remove('spinning');
@@ -597,23 +639,19 @@
     for (let i = 0; i < results.length; i++) {
       const r = results[i];
       if (r.status === 'fulfilled') {
-        const name = allMatches[i].name || extractMatchName(r.value) || `Match ${allMatches[i].id}`;
-        games.push({ name, cup: allMatches[i].cup, data: r.value });
+        const m    = toFetch[i];
+        const name = m.name || extractMatchName(r.value) || `Match ${m.id}`;
+        games.push({ name, cup: m.cup, teamId: m.teamId, teamName: m.teamName, data: r.value });
       } else {
-        console.warn(`Match ${allMatches[i].id} misslyckades:`, r.reason);
+        console.warn(`Match ${toFetch[i].id} misslyckades:`, r.reason);
       }
     }
 
-    if (games.length === 0) {
-      loadFromCache(contentsEl);
-      return;
-    }
+    if (games.length === 0) { loadFromCache(contentsEl); return; }
 
     games.sort((a, b) => getMatchStart(a.data) - getMatchStart(b.data));
-
     render();
 
-    // Schedule next auto-refresh
     clearTimeout(autoRefreshTimer);
     const proxy = window.MATCH_CONFIG?.proxy;
     const refreshInterval = proxy && anyMatchLive() ? 10 * 1000 : 10 * 60 * 1000;
@@ -798,7 +836,8 @@
   }
 
   // ── Render ─────────────────────────────────────────────────────────────────
-  let activeCup = null;
+  let activeCup      = null;
+  let activeTeamId   = null;
   let activeMatchIdx = null;
 
   function render() {
@@ -824,11 +863,24 @@
 
     if (!activeCup || !cupGroups[activeCup]) activeCup = cupOrder[0];
 
-    const visibleIndices = new Set(cupGroups[activeCup].map(({ i }) => i));
+    // Lag-filter: unika teamIds inom aktiv cup (bara om fler än ett)
+    const cupGames  = cupGroups[activeCup];
+    const teamMap   = {};
+    for (const { i } of cupGames) {
+      const { teamId, teamName } = games[i];
+      if (teamId && !teamMap[teamId]) teamMap[teamId] = teamName || `Lag ${teamId}`;
+    }
+    const teamIds = Object.keys(teamMap);
+    if (!activeTeamId || !teamMap[activeTeamId]) activeTeamId = teamIds[0] || null;
 
-    // Resolve active match index
+    // Filtrera matcher efter valt lag (om fler än ett)
+    const filteredGames = teamIds.length > 1 && activeTeamId
+      ? cupGames.filter(({ i }) => String(games[i].teamId) === String(activeTeamId))
+      : cupGames;
+
+    const visibleIndices = new Set(filteredGames.map(({ i }) => i));
     if (activeMatchIdx == null || !visibleIndices.has(activeMatchIdx)) {
-      activeMatchIdx = cupGroups[activeCup][0].i;
+      activeMatchIdx = filteredGames[0]?.i ?? null;
     }
 
     // Cup selector pills
@@ -838,10 +890,17 @@
         ).join('')}</div>`
       : '';
 
+    // Lag-pills (bara om fler än ett lag i cupen)
+    const teamPillsHtml = teamIds.length > 1
+      ? `<div class="team-selector">${teamIds.map(tid =>
+          `<button type="button" class="team-pill${tid === activeTeamId ? ' active' : ''}" data-team="${tid}">${esc(teamMap[tid])}</button>`
+        ).join('')}</div>`
+      : '';
+
     // Match dropdown
     const selectHtml = `<div class="match-select-wrap">
       <select class="match-select" id="matchSelect">
-        ${cupGroups[activeCup].map(({ p, i }) => {
+        ${filteredGames.map(({ p, i }) => {
           const dateStr = p.matchDate ? `${formatDateShort(p.matchDate)} ${formatTime(p.matchDate)}` : '';
           const label   = `${games[i].name}${dateStr ? '  ·  ' + dateStr : ''}`;
           return `<option value="${i}"${i === activeMatchIdx ? ' selected' : ''}>${label}</option>`;
@@ -849,7 +908,7 @@
       </select>
     </div>`;
 
-    tabsEl.innerHTML = pillsHtml + selectHtml;
+    tabsEl.innerHTML = pillsHtml + teamPillsHtml + selectHtml;
 
     contentsEl.innerHTML = parsed.map((p, i) =>
       renderGame(p, i, i === activeMatchIdx, games[i].cup || '')
@@ -863,9 +922,13 @@
 
     tabsEl.querySelectorAll('.cup-pill').forEach(pill => {
       pill.addEventListener('click', () => {
-        activeCup = pill.dataset.cup;
-        activeMatchIdx = null;
-        render();
+        activeCup = pill.dataset.cup; activeTeamId = null; activeMatchIdx = null; render();
+      });
+    });
+
+    tabsEl.querySelectorAll('.team-pill').forEach(pill => {
+      pill.addEventListener('click', () => {
+        activeTeamId = pill.dataset.team; activeMatchIdx = null; render();
       });
     });
 

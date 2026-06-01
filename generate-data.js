@@ -55,20 +55,59 @@ function fetchJson(url) {
   });
 }
 
+async function fetchTeamMatchIds(teamId, baseUrl, tournamentId) {
+  const q    = encodeURIComponent(`Team({id:${teamId}}){matches:[{home:{},away:{},result:{}}]}`);
+  const url  = `${baseUrl}?call=${q}&lang=en&tournamentId=${tournamentId}`;
+  const data = await fetchJson(url);
+  const ids  = new Set();
+  let teamName = `Team ${teamId}`;
+  for (const [key, val] of Object.entries(data.responses || {})) {
+    const m = key.match(/^Match\(\{id:(\d+)\}\)$/);
+    if (m) ids.add(parseInt(m[1]));
+    if (key === `Team({id:${teamId}})` && val.entity?.__typename === 'Team') {
+      teamName = val.entity.name?.clubName || val.entity.name?.fullName || teamName;
+    }
+  }
+  return { ids: [...ids], teamName };
+}
+
 async function main() {
   const games = [];
 
   for (const cup of cups) {
-    const { name: cupName, baseUrl, tournamentId, matches = [] } = cup;
+    const { name: cupName, baseUrl, tournamentId, matches = [], teamIds = [] } = cup;
     console.log(`\n[${cupName}]`);
-    for (const m of matches) {
-      process.stdout.write(`  Match ${m.id}... `);
+
+    // matchId -> { teamId, teamName }
+    const matchTeamMap = {};
+    const manualNames  = Object.fromEntries(matches.filter(m => m.name).map(m => [m.id, m.name]));
+    const allIds       = matches.map(m => m.id);
+
+    for (const teamId of teamIds) {
+      process.stdout.write(`  Hämtar matcher för lag ${teamId}... `);
       try {
-        const q    = encodeURIComponent(buildQuery(m.id));
+        const { ids, teamName } = await fetchTeamMatchIds(teamId, baseUrl, tournamentId);
+        let added = 0;
+        for (const id of ids) {
+          if (!matchTeamMap[id]) matchTeamMap[id] = { teamId, teamName };
+          if (!allIds.includes(id)) { allIds.push(id); added++; }
+        }
+        console.log(`✓  ${teamName} (${ids.length} matcher, ${added} nya)`);
+      } catch (e) {
+        console.log(`✗  ${e.message}`);
+      }
+    }
+
+    for (const id of allIds) {
+      const teamInfo   = matchTeamMap[id] || null;
+      const manualName = manualNames[id];
+      process.stdout.write(`  Match ${id}... `);
+      try {
+        const q    = encodeURIComponent(buildQuery(id));
         const url  = `${baseUrl}?call=${q}&lang=en&tournamentId=${tournamentId}`;
         const data = await fetchJson(url);
-        const name = m.name || extractMatchName(data) || `Match ${m.id}`;
-        games.push({ name, cup: cupName, data });
+        const name = manualName || extractMatchName(data) || `Match ${id}`;
+        games.push({ name, cup: cupName, teamId: teamInfo?.teamId || null, teamName: teamInfo?.teamName || null, data });
         console.log(`✓  ${name}`);
       } catch (e) {
         console.log('✗  ' + e.message);
