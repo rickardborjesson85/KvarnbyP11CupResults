@@ -1002,13 +1002,22 @@
 
     const parsed = games.map(g => parseGame(g.data));
 
-    // Group by cup
-    const cupOrder = [];
+    // Get all cups from config (including empty ones)
+    const config = getActiveConfig();
+    const cupOrder = (config?.cups || []).map(c => c.name);
     const cupGroups = {};
+
+    // Initialize all cups from config
+    cupOrder.forEach(cup => {
+      cupGroups[cup] = [];
+    });
+
+    // Add games to their respective cups
     parsed.forEach((p, i) => {
       const cup = games[i].cup || '';
-      if (!cupGroups[cup]) { cupGroups[cup] = []; cupOrder.push(cup); }
-      cupGroups[cup].push({ p, i });
+      if (cup && cupGroups[cup]) {
+        cupGroups[cup].push({ p, i });
+      }
     });
 
     if (!activeCup || !cupGroups[activeCup]) activeCup = cupOrder[0];
@@ -1048,7 +1057,8 @@
       : '';
 
     // Match dropdown
-    const selectHtml = `<div class="match-select-wrap">
+    const selectHtml = filteredGames.length > 0
+      ? `<div class="match-select-wrap">
       <select class="match-select" id="matchSelect">
         ${filteredGames.map(({ p, i }) => {
           const dateStr = p.matchDate ? `${formatDateShort(p.matchDate)} ${formatTime(p.matchDate)}` : '';
@@ -1056,19 +1066,28 @@
           return `<option value="${i}"${i === activeMatchIdx ? ' selected' : ''}>${label}</option>`;
         }).join('')}
       </select>
-    </div>`;
+    </div>`
+      : '';
 
     tabsEl.innerHTML = pillsHtml + teamPillsHtml + selectHtml;
 
-    contentsEl.innerHTML = parsed.map((p, i) =>
-      renderGame(p, i, i === activeMatchIdx, games[i].cup || '')
-    ).join('');
+    // Render games or empty state
+    if (filteredGames.length === 0) {
+      contentsEl.innerHTML = `<div class="empty-state"><div class="icon">🏀</div><p>Inga matcher ännu för ${esc(activeCup)}</p></div>`;
+    } else {
+      contentsEl.innerHTML = filteredGames.map(({ p, i }) =>
+        renderGame(p, i, i === activeMatchIdx, games[i].cup || '')
+      ).join('');
+    }
 
-    document.getElementById('matchSelect').addEventListener('change', function () {
-      activeMatchIdx = Number(this.value);
-      contentsEl.querySelectorAll('.game-content').forEach(c => c.classList.remove('active'));
-      contentsEl.querySelector(`.game-content[data-idx="${this.value}"]`).classList.add('active');
-    });
+    const matchSelect = document.getElementById('matchSelect');
+    if (matchSelect) {
+      matchSelect.addEventListener('change', function () {
+        activeMatchIdx = Number(this.value);
+        contentsEl.querySelectorAll('.game-content').forEach(c => c.classList.remove('active'));
+        contentsEl.querySelector(`.game-content[data-idx="${this.value}"]`).classList.add('active');
+      });
+    }
 
     tabsEl.querySelectorAll('.cup-pill').forEach(pill => {
       pill.addEventListener('click', () => {

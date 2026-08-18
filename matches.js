@@ -32,6 +32,12 @@ window.MATCH_CONFIG = {
       baseUrl: "https://cph-invitational.dk/rest/results_api/call",
       tournamentId: 69939565,
       teamIds: [74378470]
+    },
+    {
+      name: "Blackeberg 2026",
+      baseUrl: "https://blackebergbasketcup.cupmanager.net/rest/results_api/call",
+      tournamentId: 72864297,
+      teamIds: [82471420, 83155247]
     }
   ]
 };
