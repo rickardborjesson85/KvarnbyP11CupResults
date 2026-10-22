@@ -38,6 +38,12 @@ window.MATCH_CONFIG = {
       baseUrl: "https://blackebergbasketcup.cupmanager.net/rest/results_api/call",
       tournamentId: 72864297,
       teamIds: [82471420, 83155247]
+    },
+    {
+      name: "Södertälje 2026",
+      baseUrl: "https://sodertaljeopen.cupmanager.net/rest/results_api/call",
+      tournamentId: 74326859,
+      teamIds: [77287026, 86729611]
     }
   ]
 };
